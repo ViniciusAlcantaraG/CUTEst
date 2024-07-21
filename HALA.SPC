@@ -1,0 +1,1 @@
+/home/alcantara/.cutest/specs/HALA.SPC

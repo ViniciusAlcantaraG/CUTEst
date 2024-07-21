@@ -19,6 +19,21 @@ $(OBJ)/%.o : %.C
             $(CC) $(CFLAGSN) $(CPPFLAGS) $< -o $@ )
 	@printf '[ OK ]\n'
 
+
+$(OBJ)/%.o : %.cpp
+	@printf ' %-9s %-15s\t\t' "Compiling" "$*"
+	$(CC) $(CPFLAGS) $(CPPFLAGS) $< -o $@ \
+          ||  ( printf ' %-26s' "=> Disabling optimization " ; \
+            $(CC) $(CPFLAGSN) $(CPPFLAGS) $< -o $@ )
+	@printf '[ OK ]\n'
+
+$(OBJ)/%.o : %.CPP
+	@printf ' %-9s %-15s\t\t' "Compiling" "$*"
+	$(CC) $(CPFLAGS) $(CPPFLAGS) $< -o $@ \
+          ||  ( printf ' %-26s' "=> Disabling optimization " ; \
+            $(CC) $(CPFLAGSN) $(CPPFLAGS) $< -o $@ )
+	@printf '[ OK ]\n'
+
 $(OBJ)/%.o : %.F90
 	@printf ' %-9s %-15s\t\t' "Compiling" "$*"
 	$(FORTRAN) $(F90FLAGS) $(CPPFLAGS) $< -o $@ \
