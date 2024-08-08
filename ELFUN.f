@@ -11,10 +11,32 @@
       INTEGER ICALCF(LCALCF)
       DOUBLE PRECISION FUVALS(LFVALU), XVALUE(LXVALU), EPVALU(LEPVLU)
 C
-C  Problem name : HS3       
+C  Problem name : HS21      
 C
 C  -- produced by SIFdecode 2.4
 C
+      INTEGER IELEMN, IELTYP, IHSTRT, ILSTRT, IGSTRT, IPSTRT
+      INTEGER JCALCF
+      DOUBLE PRECISION V1    
       IFSTAT = 0
+      DO     2 JCALCF = 1, NCALCF
+       IELEMN = ICALCF(JCALCF) 
+       ILSTRT = ISTAEV(IELEMN) - 1
+       IGSTRT = INTVAR(IELEMN) - 1
+       IPSTRT = ISTEPA(IELEMN) - 1
+       IF ( IFFLAG == 3 ) IHSTRT = ISTADH(IELEMN) - 1
+C
+C  Element type : SQ        
+C
+       V1     = XVALUE(IELVAR(ILSTRT+     1))
+       IF ( IFFLAG == 1 ) THEN
+        FUVALS(IELEMN)= V1 * V1                                  
+       ELSE
+        FUVALS(IGSTRT+     1)= V1 + V1                                  
+        IF ( IFFLAG == 3 ) THEN
+         FUVALS(IHSTRT+     1)=2.0                                      
+        END IF
+       END IF
+    2 CONTINUE
       RETURN
       END

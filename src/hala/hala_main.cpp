@@ -1,56 +1,41 @@
-/* THIS VERSION: CUTEST 2.2 - 2023-12-02 AT 14:30 GMT */
-
-/* ============================================
- * CUTEst interface for generic package
- *
- * D. Orban Feb. 3, 2003
- * CUTEst evolution, Nick Gould Jan 4 2013
- *
- * Take a look at $CUTEST/include/cutest.h and
- * $CUTEST/src/loqo/loqoma.c  for more examples.
- * ============================================
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
 #include <string.h>
+#include <time.h>
+#include <iostream>
+#include <fstream>
 
 #define GENCMA
 
 #ifdef __cplusplus
-extern "C" {   /* To prevent C++ compilers from mangling symbols */
+extern "C" {
 #endif
+
 
 #include "cutest.h"
 #include "cutest_routines.h"
 
 #define HALA    hala
-#define HALASPC  halaspc
+#define HALASPC halaspc
 #define GETINFO getinfo
 
-rp_ HALA( int, int, double*, int );
-void HALASPC( integer, char * );
-void GETINFO( integer, integer, rp_ *, rp_ *,
-              rp_ *, rp_ *, logical *, logical *,
-              VarTypes * );
+rp_ HALA(int, int, double*, int, double*, double*, double, double*, double*, double, double, double, int*);
+void HALASPC(integer, char*);
+void GETINFO(integer, integer, rp_*, rp_*, rp_*, rp_*, logical*, logical*, VarTypes*);
 
+integer CUTEst_nvar;
+integer CUTEst_ncon;
+integer CUTEst_nnzj;
+integer CUTEst_nnzh;
 
-integer CUTEst_nvar;        /* number of variables */
-integer CUTEst_ncon;        /* number of constraints */
-integer CUTEst_nnzj;        /* number of nonzeros in Jacobian */
-integer CUTEst_nnzh;        /* number of nonzeros in upper triangular
-                                  part of the Hessian of the Lagrangian */
-
-int MAINENTRY( void ){
-
-    char *fname = "OUTSDIF.d"; /* CUTEst data file */
-    integer funit = 42;        /* FORTRAN unit number for OUTSDIF.d */
-    integer iout = 6;          /* FORTRAN unit number for error output */
-    integer io_buffer = 11;    /* FORTRAN unit internal input/output */
-    integer ierr;              /* Exit flag from OPEN and CLOSE */
-    integer status;            /* Exit flag from CUTEst tools */
+int MAINENTRY(void) {
+    const char *fname = "OUTSDIF.d";
+    integer funit = 42;
+    integer iout = 6;
+    integer io_buffer = 11;
+    integer ierr;
+    integer status;
 
     VarTypes vtypes;
 
@@ -58,7 +43,7 @@ int MAINENTRY( void ){
     rp_ *v = NULL, *cl = NULL, *cu = NULL;
     logical *equatn = NULL, *linear = NULL;
     char *pname, *vnames, *gnames, *cptr;
-    char **Vnames, **Gnames; /* vnames and gnames as arrays of strings */
+    char **Vnames, **Gnames;
     logical grad;
     integer e_order = 1, l_order = 0, v_order = 0;
     logical constrained = FALSE_;
@@ -69,148 +54,86 @@ int MAINENTRY( void ){
     integer ExitCode;
     int i, j;
 
-    /* Open problem description file OUTSDIF.d */
     ierr = 0;
-    FORTRAN_open( &funit, fname, &ierr );
-    if ( ierr )
-    {
+    FORTRAN_open(&funit, fname, &ierr);
+    if (ierr) {
         printf("Error opening file OUTSDIF.d.\nAborting.\n");
         exit(1);
     }
 
-    /* Determine problem size */
-    CUTEST_cdimen_r( &status, &funit, &CUTEst_nvar, &CUTEst_ncon );
-
-    if ( status )
-    {
+    CUTEST_cdimen_r(&status, &funit, &CUTEst_nvar, &CUTEst_ncon);
+    if (status) {
         printf("** CUTEst error, status = %d, aborting\n", status);
         exit(status);
     }
 
-    /* Determine whether to call constrained or unconstrained tools */
-    if ( CUTEst_ncon ) constrained = TRUE_;
+    if (CUTEst_ncon) constrained = TRUE_;
 
-    /* Reserve memory for variables, bounds, and multipliers */
-    /* and call appropriate initialization routine for CUTEst */
-    MALLOC( x,      CUTEst_nvar, rp_ );
-    MALLOC( bl,     CUTEst_nvar, rp_ );
-    MALLOC( bu,     CUTEst_nvar, rp_ );
-    if ( constrained )
-    {
-        MALLOC( equatn, CUTEst_ncon, logical    );
-        MALLOC( linear, CUTEst_ncon, logical    );
-        MALLOC( v,      CUTEst_ncon, rp_ );
-        MALLOC( cl,     CUTEst_ncon, rp_ );
-        MALLOC( cu,     CUTEst_ncon, rp_ );
-        CUTEST_csetup_r( &status, &funit, &iout, &io_buffer,
-                       &CUTEst_nvar, &CUTEst_ncon, x, bl, bu,
-                       v, cl, cu, equatn, linear,
-                       &e_order, &l_order, &v_order );
-        /*printf("CUTEst_nvar = %d\n", CUTEst_nvar);
-        printf("CUTEst_ncon = %d\n", CUTEst_ncon);
-        printf("x = ");
-        for (i = 0; i < CUTEst_nvar ; i++)
-            printf("%g ", x[i]);
-        printf("\n");
-        printf("bl = ");
-        for (i = 0; i < CUTEst_nvar ; i++)
-            printf("%g ", bl[i]);
-        printf("\n");
-        printf("bu = ");
-        for (i = 0; i < CUTEst_nvar ; i++)
-            printf("%g ", bu[i]);
-        printf("\n");
-        printf("v = ");
-        for (i = 0; i < CUTEst_ncon ; i++)
-            printf("%g ", v[i]);
-        printf("\n");
-        printf("cl = ");
-        for (i = 0; i < CUTEst_ncon ; i++)
-            printf("%g ", cl[i]);
-        printf("\n");
-        printf("cu = ");
-        for (i = 0; i < CUTEst_ncon ; i++)
-            printf("%g ", cu[i]);
-        printf("\n");
-        printf("equatn = ");
-        for (i = 0; i < CUTEst_ncon ; i++)
-            printf("%d ", equatn[i]);
-        printf("\n");
-        printf("linear = ");
-        for (i = 0; i < CUTEst_ncon ; i++)
-            printf("%d ", linear[i]);
-            printf("\n"); */
+    MALLOC(x, CUTEst_nvar, rp_);
+    MALLOC(bl, CUTEst_nvar, rp_);
+    MALLOC(bu, CUTEst_nvar, rp_);
+    if (constrained) {
+        MALLOC(equatn, CUTEst_ncon, logical);
+        MALLOC(linear, CUTEst_ncon, logical);
+        MALLOC(v, CUTEst_ncon, rp_);
+        MALLOC(cl, CUTEst_ncon, rp_);
+        MALLOC(cu, CUTEst_ncon, rp_);
+        CUTEST_csetup_r(&status, &funit, &iout, &io_buffer,
+                        &CUTEst_nvar, &CUTEst_ncon, x, bl, bu,
+                        v, cl, cu, equatn, linear,
+                        &e_order, &l_order, &v_order);
+    } else {
+        CUTEST_usetup_r(&status, &funit, &iout, &io_buffer,
+                        &CUTEst_nvar, x, bl, bu);
     }
-    else
-    {    CUTEST_usetup_r( &status, &funit, &iout, &io_buffer,
-                         &CUTEst_nvar, x, bl, bu );
-    /*    printf("CUTEst_nvar = %d\n", CUTEst_nvar); */
-    }
-    if ( status )
-    {
+    if (status) {
         printf("** CUTEst error, status = %d, aborting\n", status);
         exit(status);
     }
 
-    /* Get problem, variables and constraints names */
     MALLOC(pname, FSTRING_LEN + 1, char);
-    MALLOC(vnames, CUTEst_nvar * FSTRING_LEN, char);        /* For Fortran */
-    MALLOC(Vnames, CUTEst_nvar, char *);               /* Array of strings */
+    MALLOC(vnames, CUTEst_nvar * FSTRING_LEN, char);
+    MALLOC(Vnames, CUTEst_nvar, char*);
     for (i = 0; i < CUTEst_nvar; i++)
         MALLOC(Vnames[i], FSTRING_LEN + 1, char);
 
-    if ( constrained )
-    {
-        MALLOC(gnames, CUTEst_ncon * FSTRING_LEN, char);   /* For Fortran */
-        MALLOC(Gnames, CUTEst_ncon, char *);          /* Array of strings */
+    if (constrained) {
+        MALLOC(gnames, CUTEst_ncon * FSTRING_LEN, char);
+        MALLOC(Gnames, CUTEst_ncon, char*);
         for (i = 0; i < CUTEst_ncon; i++)
             MALLOC(Gnames[i], FSTRING_LEN + 1, char);
-        CUTEST_cnames_r( &status, &CUTEst_nvar, &CUTEst_ncon,
-                       pname, vnames, gnames );
-    }
-    else
-    {
-        CUTEST_unames_r( &status, &CUTEst_nvar, pname, vnames );
+        CUTEST_cnames_r(&status, &CUTEst_nvar, &CUTEst_ncon,
+                        pname, vnames, gnames);
+    } else {
+        CUTEST_unames_r(&status, &CUTEst_nvar, pname, vnames);
     }
 
-    if ( status )
-    {
+    if (status) {
         printf("** CUTEst error, status = %d, aborting\n", status);
         exit(status);
     }
 
-    /* Make sure to null-terminate problem name */
     pname[FSTRING_LEN] = '\0';
-
     printf(" Problem                 : %-s\n", pname);
 
-    /* Transfer variables and constraint names into arrays of
-     * null-terminated strings.
-     * If you know of a simpler way to do this portably, let me know!
-     */
-    for (i = 0; i < CUTEst_nvar; i++)
-    {
+    for (i = 0; i < CUTEst_nvar; i++) {
         cptr = vnames + i * FSTRING_LEN;
-        for (j = 0; j < FSTRING_LEN; j++)
-        {
+        for (j = 0; j < FSTRING_LEN; j++) {
             Vnames[i][j] = *cptr;
             cptr++;
         }
         Vnames[i][FSTRING_LEN] = '\0';
     }
 
-    for (i = 0; i < CUTEst_ncon; i++)
-    {
+    for (i = 0; i < CUTEst_ncon; i++) {
         cptr = gnames + i * FSTRING_LEN;
-        for (j = 0; j < FSTRING_LEN; j++)
-        {
+        for (j = 0; j < FSTRING_LEN; j++) {
             Gnames[i][j] = *cptr;
             cptr++;
         }
         Gnames[i][FSTRING_LEN] = '\0';
     }
 
-    /* Fortran strings no longer needed */
     FREE(vnames);
     if (constrained) FREE(gnames);
 
@@ -218,83 +141,108 @@ int MAINENTRY( void ){
     for (i = 0; i < CUTEst_nvar; i++)
         printf("  %s\n", Vnames[i]);
 
-    /* Free memory for variable names */
     for (i = 0; i < CUTEst_nvar; i++) FREE(Vnames[i]);
     FREE(Vnames);
 
-    if ( constrained ) printf("Constraint names:\n");
+    if (constrained) printf("Constraint names:\n");
     for (i = 0; i < CUTEst_ncon; i++)
         printf("  %s\n", Gnames[i]);
 
-    /* Free memory for constraint names */
     for (i = 0; i < CUTEst_ncon; i++) FREE(Gnames[i]);
     if (constrained) FREE(Gnames);
 
-    /* Obtain basic info on problem */
     GETINFO(CUTEst_nvar, CUTEst_ncon, bl, bu, cl, cu,
             equatn, linear, &vtypes);
 
-    int maxIterations = 100;
+    int maxIterations = 30;
+    double tau_values[3] = {0.1, 10.0, 50.0};
+    double tolerance_values[5] = {1e-3, 1e-4, 1e-5, 1e-6, 1e-7};
+    double lambda0_values[3] = {1.0, 10.0, 50.0};
+    double alpha = 0.6;
+    
 
-    /* Call the optimizer */
-    dummy = HALA(CUTEst_nvar, CUTEst_ncon, x, maxIterations);
-    ExitCode = 0;
+    std::ofstream MyFile;
+    MyFile.open("results.txt", std::ios_base::app);
+    MyFile << "#" << pname << "\n";
 
-    /* Get CUTEst statistics */
-    CUTEST_creport_r( &status, calls, cpu );
+    for (int t = 0; t < 3; t++) {
+        for (int l = 0; l < 3; l++) {
+            for (int tol = 0; tol < 5; tol++) {
 
-    if ( status )
-    {
-        printf("** CUTEst error, status = %d, aborting\n", status);
-        exit(status);
+                int currentIteration = 0;
+                double tau = tau_values[t];
+                double lambda0 = lambda0_values[l];
+                double tolerance = tolerance_values[tol];
+
+                clock_t start_time = clock();
+                dummy = HALA(CUTEst_nvar, CUTEst_ncon, x, maxIterations, bl, bu, tau, cl, cu, tolerance, alpha, lambda0, &currentIteration);
+                clock_t end_time = clock();
+                double solve_time = ((double) (end_time - start_time)) / CLOCKS_PER_SEC;
+                ExitCode = 0;
+
+                CUTEST_creport_r(&status, calls, cpu);
+                if (status) {
+                    printf("** CUTEst error, status = %d, aborting\n", status);
+                    exit(status);
+                }
+                /*
+                printf("\n\n ************************ CUTEst statistics ************************\n\n");
+                printf(" Code used               : HALA\n");
+                printf(" Problem                 : %-s\n", pname);
+                printf(" tau                     = %-10.2f\n", tau);
+                printf(" lambda0                 = %-10.2f\n", lambda0);
+                printf(" tolerance               = %-10.2e\n", tolerance);
+                printf(" # variables             = %-10d\n", (int)CUTEst_nvar);
+                printf(" # constraints           = %-10d\n", (int)CUTEst_ncon);
+                printf(" # linear constraints    = %-10d\n", vtypes.nlin);
+                printf(" # equality constraints  = %-10d\n", vtypes.neq);
+                printf(" # inequality constraints= %-10d\n", vtypes.nineq);
+                printf(" # bound constraints     = %-10d\n", vtypes.nbnds);
+                printf(" # objective functions   = %-15.7g\n", calls[0]);
+                printf(" # objective gradients   = %-15.7g\n", calls[1]);
+                printf(" # objective Hessians    = %-15.7g\n", calls[2]);
+                printf(" # Hessian-vector prdct  = %-15.7g\n", calls[3]);
+                if (constrained) printf(" # Jacobians             = %-15.7g\n", calls[4]);
+                if (constrained) printf(" # constraint gradients  = %-15.7g\n", calls[5]);
+                if (constrained) printf(" # constraint Hessians   = %-15.7g\n", calls[6]);
+                printf(" Final f                 = %-15.5e\n", dummy);
+                printf(" # Iterations   = %-15d\n", currentIteration);
+                printf(" Preparation time        = %-10.5f seconds\n", cpu[0]);
+                printf(" Solve time              = %-10.5f seconds\n", solve_time);
+                printf(" ******************************************************************\n\n");*/
+
+                MyFile << "Tau: " << tau << "\n";
+                MyFile << "Tolerance: " << tolerance << "\n";
+                MyFile << "Lambda0: " << lambda0 << "\n";
+                MyFile << "Final f: " << dummy << "\n";
+                MyFile << "Iterations: " << currentIteration << "\n";
+                MyFile << "Solve time: " << solve_time << "\n";
+                MyFile << "\n";
+            }
+        }
     }
-
-    printf("\n\n ************************ CUTEst statistics ************************\n\n");
-    printf(" Code used               : GENC\n");
-    printf(" Problem                 : %-s\n", pname);
-    printf(" # variables             = %-10d\n", (int)CUTEst_nvar);
-    printf(" # constraints           = %-10d\n", (int)CUTEst_ncon);
-    printf(" # linear constraints    = %-10d\n", vtypes.nlin);
-    printf(" # equality constraints  = %-10d\n", vtypes.neq);
-    printf(" # inequality constraints= %-10d\n", vtypes.nineq);
-    printf(" # bound constraints     = %-10d\n", vtypes.nbnds);
-    printf(" # objective functions   = %-15.7g\n", calls[0]);
-    printf(" # objective gradients   = %-15.7g\n", calls[1]);
-    printf(" # objective Hessians    = %-15.7g\n", calls[2]);
-    printf(" # Hessian-vector prdct  = %-15.7g\n", calls[3]);
-    if (constrained) printf(" # constraints functions = %-15.7g\n", calls[4]);
-    if (constrained) printf(" # constraints gradients = %-15.7g\n", calls[5]);
-    if (constrained) printf(" # constraints Hessians  = %-15.7g\n", calls[6]);
-    printf(" Exit code               = %-10d\n", (int)ExitCode);
-    printf(" Final f                 = %-15.7g\n", dummy);
-    printf(" Set up time             = %-10.2f seconds\n", cpu[0]);
-    printf(" Solve time              = %-10.2f seconds\n", cpu[1]);
-    printf(" ******************************************************************\n\n");
+    MyFile.close();
 
     ierr = 0;
-    FORTRAN_close( &funit, &ierr );
-    if ( ierr )
-    {
-        printf( "Error closing %s on unit %d.\n", fname, (int)funit );
-        printf( "Trying not to abort.\n" );
+    FORTRAN_close(&funit, &ierr);
+    if (ierr) {
+        printf("Error closing %s on unit %d.\n", fname, (int)funit);
+        printf("Trying not to abort.\n");
     }
 
-    /* Free workspace */
-    FREE( pname );
-    FREE( x ); FREE( bl ); FREE( bu );
-    FREE( v ); FREE( cl ); FREE( cu );
-    FREE( equatn );
-    FREE( linear );
+    FREE(pname);
+    FREE(x); FREE(bl); FREE(bu);
+    FREE(v); FREE(cl); FREE(cu);
+    FREE(equatn);
+    FREE(linear);
 
-    if ( constrained )
-      CUTEST_cterminate_r( &status );
+    if (constrained)
+        CUTEST_cterminate_r(&status);
     else
-      CUTEST_uterminate_r( &status );
+        CUTEST_uterminate_r(&status);
 
     return 0;
-
 }
-
 #ifdef __cplusplus
-}    /* Closing brace for  extern "C"  block */
+}
 #endif
