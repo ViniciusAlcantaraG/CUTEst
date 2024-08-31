@@ -17,11 +17,11 @@ using namespace LBFGSpp;
 using namespace std;
 
 //Function declaration
-double CalculateHL(double*, double, int, double, double*);
-void CalculateHLGr(double*, double, int, int, double*, double*, double*, double*);
-void UpdateLagr(int, double, double*, double*);
+double CalculateHL(double*, double, int, double, double*, int*);
+void CalculateHLGr(double*, double, int, int, double*, double*, double*, double*, int*);
+void UpdateLagr(int, double, double*, double*, int*);
 bool CheckFeasible(int, double, double*, double*, double*, double*);
-bool CheckConverge(int, double*, double*, double);
+bool CheckConverge(int, Eigen::VectorXd, Eigen::VectorXd, double);
 
 
 
@@ -29,11 +29,13 @@ class Evaluation{
     private:
         int n;
         int m;
-        double tau;
+        int* constraintType;
+        double* tau;
         double* lambda;
 
     public:
-        Evaluation(int n_, int m_, double tau_, double* lambda_) : n(n_), m(m_), tau(tau_), lambda(lambda_){}
+        Evaluation(int n_, int m_, int* constraintType_, double* tau_, double* lambda_) : 
+        n(n_), m(m_), constraintType(constraintType_), tau(tau_), lambda(lambda_){}
         //Function to evaluate Lagrangian and gradient
         double operator()(const VectorXd& x, VectorXd& grad){
 
@@ -48,11 +50,9 @@ class Evaluation{
             for (int j = 0; j < n; j++){
                 x0[j] = x(j);
             }
-            
             //Evaluate f(x) and g(x)
             CUTEST_cfn(&status, &n, &m, x0, &f, constraints);
             
-
             logical grglagf = FALSE_;
             logical jtrans = FALSE_;
 
@@ -60,9 +60,8 @@ class Evaluation{
             CUTEST_cgr(&status, &n, &m, x0, NULL, &grglagf, objectiveGradient, &jtrans, &m, &n, constraintGradient);
 
             //Calculate Hyperbolic Lagrangian and its gradient
-            double fx = CalculateHL(lambda, tau, m, f, constraints);
-            CalculateHLGr(lambda, tau, m, n, objectiveGradient, constraintGradient, constraints, gradResult);
-            
+            double fx = CalculateHL(lambda, *tau, m, f, constraints, constraintType); 
+            CalculateHLGr(lambda, *tau, m, n, objectiveGradient, constraintGradient, constraints, gradResult, constraintType);
             for (int j = 0; j < n; j++){
                 grad[j] = gradResult[j];
             }
@@ -74,7 +73,7 @@ class Evaluation{
 
 
 rp_ hala(int n, int m, double* x, int maxIterations, double* bl, double* bu,
- double tau, double* cl, double* cu, double tolerance, double alpha, double lambda0, int* currentIteration){
+ double tau, double* cl, double* cu, double tolerance, double alpha, double lambda0, int* currentIteration, int* constraintType){
 
     //Memory allocation for arrays
     double f;
@@ -88,46 +87,41 @@ rp_ hala(int n, int m, double* x, int maxIterations, double* bl, double* bu,
 
     //Set parameters for the LBFGS-B algorithm
     LBFGSBParam<double> param;
+    param.max_iterations = 10000;
     LBFGSBSolver<double> solver(param);
-    Evaluation fun(n, m, tau, lambda);
+    Evaluation fun(n, m, constraintType, &tau, lambda);
 
-    //Set variable bounds
-    VectorXd ub(n);
-    VectorXd lb(n);
-    VectorXd xi(n);
     //Set initial values for lambda
     for (int i = 0; i < m; i++){
         lambda[i] = lambda0;
     }
+    VectorXd oldEigenX = VectorXd::Map(x,n);
+    VectorXd newEigenX = VectorXd::Map(x, n);
+    VectorXd lowerBound = VectorXd::Map(bl, n);
+    VectorXd upperBound = VectorXd::Map(bu, n);
     
-    for (int j = 0; j < n; j++){
-        xi(j) = x[j];
-        lb(j) = bl[j];
-        ub(j) = bu[j];
-    }
-
+    int status;
     *currentIteration = 0;
     //Begin main loop
     for (int k = 0; k < maxIterations; k++){
         (*currentIteration)++;
-        for (int j = 0; j < n; j++){
-            x[j] = xi(j);
-        }
-        int numberInnerIterations = solver.minimize(fun, xi, fx, lb, ub);
- 
-        for (int j = 0; j < n; j++){
-            newX[j] = xi(j);
-            }
-        int status;
-        CUTEST_cfn(&status, &n, &m, newX, &f, constraints);
-        UpdateLagr(m, tau, lambda, constraints);
-        bool feasability = CheckFeasible(m, tolerance, lambda, constraints, cl, cu);
-        bool convergence = CheckConverge(n, x, newX, tolerance);
-
-        double HyperLagr = CalculateHL(lambda, tau, m, f, constraints);
         
+        oldEigenX = newEigenX;
+
+        int numberInnerIterations = solver.minimize(fun, newEigenX, fx, lowerBound, upperBound);
+
+        copy(newEigenX.data(), newEigenX.data() + n, newX);
+
+        CUTEST_cfn(&status, &n, &m, newX, &f, constraints);
+        UpdateLagr(m, tau, lambda, constraints, constraintType);
+        bool feasability = CheckFeasible(m, tolerance, lambda, constraints, cl, cu);
+        //bool convergence = CheckConverge(n, oldEigenX, newEigenX, tolerance);
+        bool convergence;
+        if (oldEigenX.isApprox(newEigenX, tolerance)) convergence = true;
+        else (convergence = false);
         if (feasability && convergence) break;
         if (!feasability) tau = tau * alpha;
+
     }
     delete[] newX;
     delete[] lambda;
@@ -142,41 +136,53 @@ rp_ hala(int n, int m, double* x, int maxIterations, double* bl, double* bu,
 
 
 
-double CalculateHL(double* lambda, double tau, int m, double f, double* constraints){
+double CalculateHL(double* lambda, double tau, int m, double f, double* constraints, int* constraintType){
 
     //Set hyperbolic penalty
     double Penalty = 0.0;
     for (int i = 0; i < m; i++){
-
         double gamma = lambda[i] * constraints[i];
-        Penalty += -gamma + sqrt((gamma * gamma) + (tau * tau));
+        if (constraintType[i] == 0){
+            Penalty += -gamma + sqrt((gamma * gamma) + (1/(tau * tau)));
     }
-
+        else{
+            Penalty += gamma + sqrt((gamma * gamma) + (1/(tau * tau)));
+        }
+    }
     return f + Penalty;
 }
 
 
-void CalculateHLGr(double* lambda, double tau, int m, int n, double* objectiveGradient, double* constraintGradient, double* constraints, double* gradResult){
+void CalculateHLGr(double* lambda, double tau, int m, int n, double* objectiveGradient, 
+    double* constraintGradient, double* constraints, double* gradResult, int* constraintType){
 
     //Set penalty
     for (int i = 0; i < n; i++){
         double Penalty = 0.0;
         for (int j = 0; j < m; j++){
             double gamma = lambda[j] * constraints[j];
-            Penalty += lambda[j] * (1 - (gamma / sqrt((gamma * gamma) + (tau * tau)))) * constraintGradient[i * m + j];
-            
+            if (constraintType[j] == 0){
+                Penalty -= lambda[j] * (1 - (gamma / sqrt((gamma * gamma) + (1/(tau * tau))))) * constraintGradient[i * m + j];
         }
-
-    gradResult[i] = objectiveGradient[i] - Penalty;
+            else{
+                Penalty += lambda[j] * (1 + (gamma / sqrt((gamma * gamma) + (1/(tau * tau))))) * constraintGradient[i * m + j];
+            }
+        }
+    gradResult[i] = objectiveGradient[i] + Penalty;
     }
 }
 
 
-void UpdateLagr(int m, double tau, double* lambda, double* constraints){
+void UpdateLagr(int m, double tau, double* lambda, double* constraints, int* constraintType){
 
     for (int i = 0; i < m; i++){
         double gamma = lambda[i] * constraints[i];
-        lambda[i] = lambda[i] * (1 - ((gamma)/ sqrt((gamma * gamma) + (tau * tau))));
+        if (constraintType[i] == 0){
+            lambda[i] = lambda[i] * (1 - ((gamma)/ sqrt((gamma * gamma) + (1/(tau * tau)))));
+        }
+        else{
+            lambda[i] = lambda[i] * (1 + ((gamma)/ sqrt((gamma * gamma) + (1/(tau * tau)))));
+        }
     }
 }
 
@@ -190,7 +196,7 @@ bool CheckFeasible(int m, double tolerance, double* lambda, double* constraints,
 }
 
 
-bool CheckConverge(int n, double* x, double* newX, double tolerance){
+bool CheckConverge(int n, VectorXd x, VectorXd newX, double tolerance){
 
     for (int i = 0; i < n; i++){
         if (fabs(newX[i] - x[i]) > tolerance) return false;

@@ -20,7 +20,7 @@ extern "C" {
 #define HALASPC halaspc
 #define GETINFO getinfo
 
-rp_ HALA(int, int, double*, int, double*, double*, double, double*, double*, double, double, double, int*);
+rp_ HALA(int, int, double*, int, double*, double*, double, double*, double*, double, double, double, int*, int*);
 void HALASPC(integer, char*);
 void GETINFO(integer, integer, rp_*, rp_*, rp_*, rp_*, logical*, logical*, VarTypes*);
 
@@ -154,15 +154,25 @@ int MAINENTRY(void) {
     GETINFO(CUTEst_nvar, CUTEst_ncon, bl, bu, cl, cu,
             equatn, linear, &vtypes);
 
-    int maxIterations = 30;
-    double tau_values[3] = {0.1, 10.0, 50.0};
+    int maxIterations = 500;
+    double tau_values[3] = {10, 50, 100};
     double tolerance_values[5] = {1e-3, 1e-4, 1e-5, 1e-6, 1e-7};
-    double lambda0_values[3] = {1.0, 10.0, 50.0};
-    double alpha = 0.6;
+    double lambda0_values[3] = {500.0, 1000.0, 2000.0};
+    double alpha = 1.2;
+    int* constraintType = new int[CUTEst_ncon]; 
     
 
+    for (int i = 0; i < CUTEst_ncon; i++){
+        if (cl[i] == 0){
+            constraintType[i] = 0;
+        }
+        else{
+        constraintType[i] = 1;
+    }
+    }
+
     std::ofstream MyFile;
-    MyFile.open("results.txt", std::ios_base::app);
+    MyFile.open("results5.txt", std::ios_base::app);
     MyFile << "#" << pname << "\n";
 
     for (int t = 0; t < 3; t++) {
@@ -175,54 +185,65 @@ int MAINENTRY(void) {
                 double tolerance = tolerance_values[tol];
 
                 clock_t start_time = clock();
-                dummy = HALA(CUTEst_nvar, CUTEst_ncon, x, maxIterations, bl, bu, tau, cl, cu, tolerance, alpha, lambda0, &currentIteration);
-                clock_t end_time = clock();
-                double solve_time = ((double) (end_time - start_time)) / CLOCKS_PER_SEC;
-                ExitCode = 0;
+                try{
+                    dummy = HALA(CUTEst_nvar, CUTEst_ncon, x, maxIterations, bl, bu, tau, cl, cu, tolerance, alpha, lambda0, &currentIteration, constraintType);
+                    clock_t end_time = clock();
+                    double solve_time = ((double) (end_time - start_time)) / CLOCKS_PER_SEC;
+                    ExitCode = 0;
 
-                CUTEST_creport_r(&status, calls, cpu);
-                if (status) {
-                    printf("** CUTEst error, status = %d, aborting\n", status);
-                    exit(status);
+                    CUTEST_creport_r(&status, calls, cpu);
+                    if (status) {
+                        printf("** CUTEst error, status = %d, aborting\n", status);
+                        exit(status);
+                    }
+                    /*
+                    printf("\n\n ************************ CUTEst statistics ************************\n\n");
+                    printf(" Code used               : HALA\n");
+                    printf(" Problem                 : %-s\n", pname);
+                    printf(" tau                     = %-10.2f\n", tau);
+                    printf(" lambda0                 = %-10.2f\n", lambda0);
+                    printf(" tolerance               = %-10.2e\n", tolerance);
+                    printf(" # variables             = %-10d\n", (int)CUTEst_nvar);
+                    printf(" # constraints           = %-10d\n", (int)CUTEst_ncon);
+                    printf(" # linear constraints    = %-10d\n", vtypes.nlin);
+                    printf(" # equality constraints  = %-10d\n", vtypes.neq);
+                    printf(" # inequality constraints= %-10d\n", vtypes.nineq);
+                    printf(" # bound constraints     = %-10d\n", vtypes.nbnds);
+                    printf(" # objective functions   = %-15.7g\n", calls[0]);
+                    printf(" # objective gradients   = %-15.7g\n", calls[1]);
+                    printf(" # objective Hessians    = %-15.7g\n", calls[2]);
+                    printf(" # Hessian-vector prdct  = %-15.7g\n", calls[3]);
+                    if (constrained) printf(" # Jacobians             = %-15.7g\n", calls[4]);
+                    if (constrained) printf(" # constraint gradients  = %-15.7g\n", calls[5]);
+                    if (constrained) printf(" # constraint Hessians   = %-15.7g\n", calls[6]);
+                    printf(" Final f                 = %-15.5e\n", dummy);
+                    printf(" # Iterations   = %-15d\n", currentIteration);
+                    printf(" Preparation time        = %-10.5f seconds\n", cpu[0]);
+                    printf(" Solve time              = %-10.5f seconds\n", solve_time);
+                    printf(" ******************************************************************\n\n");*/
+
+                    MyFile << "Tau: " << tau << "\n";
+                    MyFile << "Tolerance: " << tolerance << "\n";
+                    MyFile << "Lambda0: " << lambda0 << "\n";
+                    MyFile << "Final f: " << dummy << "\n";
+                    MyFile << "Iterations: " << currentIteration << "\n";
+                    MyFile << "Solve time: " << solve_time << "\n";
+                    MyFile << "\n";
                 }
-                /*
-                printf("\n\n ************************ CUTEst statistics ************************\n\n");
-                printf(" Code used               : HALA\n");
-                printf(" Problem                 : %-s\n", pname);
-                printf(" tau                     = %-10.2f\n", tau);
-                printf(" lambda0                 = %-10.2f\n", lambda0);
-                printf(" tolerance               = %-10.2e\n", tolerance);
-                printf(" # variables             = %-10d\n", (int)CUTEst_nvar);
-                printf(" # constraints           = %-10d\n", (int)CUTEst_ncon);
-                printf(" # linear constraints    = %-10d\n", vtypes.nlin);
-                printf(" # equality constraints  = %-10d\n", vtypes.neq);
-                printf(" # inequality constraints= %-10d\n", vtypes.nineq);
-                printf(" # bound constraints     = %-10d\n", vtypes.nbnds);
-                printf(" # objective functions   = %-15.7g\n", calls[0]);
-                printf(" # objective gradients   = %-15.7g\n", calls[1]);
-                printf(" # objective Hessians    = %-15.7g\n", calls[2]);
-                printf(" # Hessian-vector prdct  = %-15.7g\n", calls[3]);
-                if (constrained) printf(" # Jacobians             = %-15.7g\n", calls[4]);
-                if (constrained) printf(" # constraint gradients  = %-15.7g\n", calls[5]);
-                if (constrained) printf(" # constraint Hessians   = %-15.7g\n", calls[6]);
-                printf(" Final f                 = %-15.5e\n", dummy);
-                printf(" # Iterations   = %-15d\n", currentIteration);
-                printf(" Preparation time        = %-10.5f seconds\n", cpu[0]);
-                printf(" Solve time              = %-10.5f seconds\n", solve_time);
-                printf(" ******************************************************************\n\n");*/
-
-                MyFile << "Tau: " << tau << "\n";
-                MyFile << "Tolerance: " << tolerance << "\n";
-                MyFile << "Lambda0: " << lambda0 << "\n";
-                MyFile << "Final f: " << dummy << "\n";
-                MyFile << "Iterations: " << currentIteration << "\n";
-                MyFile << "Solve time: " << solve_time << "\n";
-                MyFile << "\n";
+                catch(...){
+                    MyFile << "Tau: " << tau << "\n";
+                    MyFile << "Tolerance: " << tolerance << "\n";
+                    MyFile << "Lambda0: " << lambda0 << "\n";
+                    MyFile << "Final f: " << "ERROR" << "\n";
+                    MyFile << "Iterations: " << "ERROR" << "\n";
+                    MyFile << "Solve time: " << "ERROR" << "\n";
+                    MyFile << "\n"; 
+            }
             }
         }
     }
     MyFile.close();
-
+    delete[] constraintType;
     ierr = 0;
     FORTRAN_close(&funit, &ierr);
     if (ierr) {
