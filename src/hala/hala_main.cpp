@@ -5,6 +5,7 @@
 #include <time.h>
 #include <iostream>
 #include <fstream>
+#include<iomanip>
 
 #define GENCMA
 
@@ -50,7 +51,7 @@ int MAINENTRY(void) {
 
     rp_ calls[7], cpu[4];
     integer nlin = 0, nbnds = 0, neq = 0;
-    rp_ dummy;
+    rp_ solution;
     integer ExitCode;
     int i, j;
 
@@ -156,7 +157,7 @@ int MAINENTRY(void) {
 
     int maxIterations = 500;
     double tau_values[3] = {10, 50, 100};
-    double tolerance_values[5] = {1e-3, 1e-4, 1e-5, 1e-6, 1e-7};
+    double tolerance_values[3] = {1e-3, 1e-5, 1e-7};
     double lambda0_values[3] = {500.0, 1000.0, 2000.0};
     double alpha = 1.2;
     int* constraintType = new int[CUTEst_ncon]; 
@@ -172,12 +173,15 @@ int MAINENTRY(void) {
     }
 
     std::ofstream MyFile;
-    MyFile.open("results5.txt", std::ios_base::app);
+    MyFile.setf(std::ios::fixed,std::ios::floatfield);
+    MyFile.precision(7);
+
+    MyFile.open("experimentFeasible.txt", std::ios_base::app);
     MyFile << "#" << pname << "\n";
 
     for (int t = 0; t < 3; t++) {
         for (int l = 0; l < 3; l++) {
-            for (int tol = 0; tol < 5; tol++) {
+            for (int tol = 0; tol < 3; tol++) {
 
                 int currentIteration = 0;
                 double tau = tau_values[t];
@@ -186,7 +190,7 @@ int MAINENTRY(void) {
 
                 clock_t start_time = clock();
                 try{
-                    dummy = HALA(CUTEst_nvar, CUTEst_ncon, x, maxIterations, bl, bu, tau, cl, cu, tolerance, alpha, lambda0, &currentIteration, constraintType);
+                    solution = HALA(CUTEst_nvar, CUTEst_ncon, x, maxIterations, bl, bu, tau, cl, cu, tolerance, alpha, lambda0, &currentIteration, constraintType);
                     clock_t end_time = clock();
                     double solve_time = ((double) (end_time - start_time)) / CLOCKS_PER_SEC;
                     ExitCode = 0;
@@ -225,7 +229,7 @@ int MAINENTRY(void) {
                     MyFile << "Tau: " << tau << "\n";
                     MyFile << "Tolerance: " << tolerance << "\n";
                     MyFile << "Lambda0: " << lambda0 << "\n";
-                    MyFile << "Final f: " << dummy << "\n";
+                    MyFile << "Final f: " << solution << "\n";
                     MyFile << "Iterations: " << currentIteration << "\n";
                     MyFile << "Solve time: " << solve_time << "\n";
                     MyFile << "\n";

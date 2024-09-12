@@ -20,8 +20,8 @@ using namespace std;
 double CalculateHL(double*, double, int, double, double*, int*);
 void CalculateHLGr(double*, double, int, int, double*, double*, double*, double*, int*);
 void UpdateLagr(int, double, double*, double*, int*);
-bool CheckFeasible(int, double, double*, double*, double*, double*);
-bool CheckConverge(int, Eigen::VectorXd, Eigen::VectorXd, double);
+bool CheckFeasible(int, double, double*, double*);
+
 
 
 
@@ -83,7 +83,10 @@ rp_ hala(int n, int m, double* x, int maxIterations, double* bl, double* bu,
     double* objectiveGradient = new double[n];
     double* constraintGradient = new double[n*m];
     double* gradResult = new double[n];
+    double* nullVector = new double[n];
     double fx;
+
+    nullVector[n] = {0.0};
 
     //Set parameters for the LBFGS-B algorithm
     LBFGSBParam<double> param;
@@ -95,7 +98,7 @@ rp_ hala(int n, int m, double* x, int maxIterations, double* bl, double* bu,
     for (int i = 0; i < m; i++){
         lambda[i] = lambda0;
     }
-    VectorXd oldEigenX = VectorXd::Map(x,n);
+    VectorXd oldEigenX = VectorXd::Map(x, n);
     VectorXd newEigenX = VectorXd::Map(x, n);
     VectorXd lowerBound = VectorXd::Map(bl, n);
     VectorXd upperBound = VectorXd::Map(bu, n);
@@ -114,12 +117,10 @@ rp_ hala(int n, int m, double* x, int maxIterations, double* bl, double* bu,
 
         CUTEST_cfn(&status, &n, &m, newX, &f, constraints);
         UpdateLagr(m, tau, lambda, constraints, constraintType);
-        bool feasability = CheckFeasible(m, tolerance, lambda, constraints, cl, cu);
-        //bool convergence = CheckConverge(n, oldEigenX, newEigenX, tolerance);
-        bool convergence;
-        if (oldEigenX.isApprox(newEigenX, tolerance)) convergence = true;
-        else (convergence = false);
-        if (feasability && convergence) break;
+        bool feasability = CheckFeasible(m, tolerance, lambda, constraints);
+        bool xConvergence = oldEigenX.isApprox(newEigenX, tolerance);
+
+        if (feasability && xConvergence) break;
         if (!feasability) tau = tau * alpha;
 
     }
@@ -133,8 +134,6 @@ rp_ hala(int n, int m, double* x, int maxIterations, double* bl, double* bu,
     return f;
 
 }
-
-
 
 double CalculateHL(double* lambda, double tau, int m, double f, double* constraints, int* constraintType){
 
@@ -187,23 +186,22 @@ void UpdateLagr(int m, double tau, double* lambda, double* constraints, int* con
 }
 
 
-bool CheckFeasible(int m, double tolerance, double* lambda, double* constraints, double* cl, double* cu){
+/*bool CheckFeasible(int m, double tolerance, double* lambda, double* constraints, double* cl, double* cu){
 
-    for (int i = 0; i < m; i ++){
+    for (int i = 0; i < m; i++){
         if (constraints[i] < cl[i] - tolerance || constraints[i] > cu[i] + tolerance) return false;
     }
     return true;
-}
+}*/
 
+bool CheckFeasible(int m, double tolerance, double* lambda, double* constraints){
 
-bool CheckConverge(int n, VectorXd x, VectorXd newX, double tolerance){
-
-    for (int i = 0; i < n; i++){
-        if (fabs(newX[i] - x[i]) > tolerance) return false;
+    for (int i = 0; i < m; i++){
+        if ((lambda[i] * constraints[i]) > tolerance || (lambda[i] * constraints[i]) < - tolerance) return false; 
     }
     return true;
+    
 }
-
 
 
 void halaspc( integer funit, char *fname )
