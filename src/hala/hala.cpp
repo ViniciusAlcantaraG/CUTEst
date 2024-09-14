@@ -1,5 +1,4 @@
 // runcutest -p hala -D HS3 -lstdc++
-
 #include "stdio.h"
 #include <iostream>
 #include <Eigen/Core>
